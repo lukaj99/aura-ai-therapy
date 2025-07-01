@@ -1,0 +1,6 @@
+
+{
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

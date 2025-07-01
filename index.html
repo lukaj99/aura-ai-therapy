@@ -1,0 +1,53 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aura: AI Voice Therapist</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#4a4e69', // A calm, deep purple-gray
+              'brand-secondary': '#4361ee', // A vibrant yet trustworthy blue
+            },
+            animation: {
+              'pulse-glow': 'pulse-glow 2s infinite ease-in-out',
+            },
+            keyframes: {
+              'pulse-glow': {
+                '0%, 100%': { 
+                  boxShadow: '0 0 0 0 rgba(239, 68, 68, 0.7)',
+                  transform: 'scale(1)'
+                },
+                '50%': { 
+                  boxShadow: '0 0 20px 10px rgba(239, 68, 68, 0)',
+                  transform: 'scale(1.05)'
+                },
+              }
+            }
+          }
+        }
+      }
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.1.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.1.0/",
+    "react/": "https://esm.sh/react@^19.1.0/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.7.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>
