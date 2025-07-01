@@ -1,6 +1,6 @@
 import { GoogleGenAI, Chat } from "@google/genai"
 import { ErrorService, ErrorType, ErrorSeverity, AppError } from './errorService'
-import { RetryManager, CircuitBreaker, retryAPICall } from '../utils/retryUtils'
+import { CircuitBreaker, retryAPICall } from '../utils/retryUtils'
 
 export interface GeminiConfig {
   model: string
@@ -168,7 +168,7 @@ export class EnhancedGeminiService {
       
       return {
         text: response.text || '',
-        audio: response.audio
+        audio: undefined
       }
     }
 
@@ -212,123 +212,110 @@ export class EnhancedGeminiService {
     }
   }
 
-  public async* sendMessageStream(message: string): AsyncGenerator<StreamChunk, void, unknown> {
-    if (!this.chat) {
-      await this.startChatSession()
+  private async sendTTSMessage(message: string): Promise<{ text: string; audio?: Uint8Array }> {
+    if (!this.ai) {
+      throw new Error('AI service not initialized')
     }
 
-    const operation = async () => {
-      if (!this.chat) {
-        throw new Error('Chat session not available')
+    const apiKey = (this.ai as any).apiKey
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.config.model}:generateContent`
+    
+    const requestBody = {
+      contents: [{
+        parts: [{
+          text: message
+        }]
+      }],
+      systemInstruction: {
+        parts: [{
+          text: this.config.systemInstruction
+        }]
+      },
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        temperature: this.config.temperature,
+        topP: this.config.topP,
+        topK: this.config.topK
       }
-
-      return this.chat.sendMessageStream({ message })
     }
 
-    try {
-      const stream = await this.circuitBreaker.execute(async () => {
-        const result = await retryAPICall(operation, {
-          maxAttempts: this.config.maxRetries || 3,
-          baseDelay: 2000,
-          onRetry: (attempt, error) => {
-            const retryError = this.errorService.createError({
-              type: ErrorType.API,
-              severity: ErrorSeverity.MEDIUM,
-              message: `Retrying stream send (attempt ${attempt})`,
-              originalError: error,
-              context: { attempt, messageLength: message.length }
-            })
-            this.errorService.handleError(retryError)
-          }
-        })
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify(requestBody)
+    })
 
-        if (!result.success) {
-          throw result.error || new Error('Failed to start message stream')
+    if (!response.ok) {
+      throw new Error(`TTS API request failed: ${response.status} ${response.statusText}`)
+    }
+
+    const data = await response.json()
+    
+    let text = ''
+    let audio: Uint8Array | undefined
+    
+    if (data.candidates?.[0]?.content?.parts) {
+      for (const part of data.candidates[0].content.parts) {
+        if (part.text) {
+          text += part.text
         }
-
-        return result.result!
-      })
-
-      let chunkCount = 0
-      const startTime = Date.now()
-
-      try {
-        for await (const chunk of stream) {
-          chunkCount++
-          
-          // Process text content
-          const text = chunk.text || ''
-          
-          // Process audio content
-          let audio: Uint8Array | undefined
-          const audioParts = chunk.candidates?.[0]?.content?.parts?.filter(
-            part => part.inlineData?.mimeType?.startsWith('audio/')
-          )
-          
-          if (audioParts && audioParts.length > 0) {
-            const audioPart = audioParts[0]
-            if (audioPart.inlineData) {
-              try {
-                audio = new Uint8Array(
-                  atob(audioPart.inlineData.data)
-                    .split('')
-                    .map(char => char.charCodeAt(0))
-                )
-              } catch (error) {
-                const audioError = this.errorService.createError({
-                  type: ErrorType.AUDIO,
-                  severity: ErrorSeverity.MEDIUM,
-                  message: 'Failed to decode audio data',
-                  originalError: error instanceof Error ? error : new Error(String(error)),
-                  context: { chunkCount, streamDuration: Date.now() - startTime }
-                })
-                this.errorService.handleError(audioError)
-              }
+        if (part.inlineData?.mimeType?.startsWith('audio/')) {
+          try {
+            const binaryString = atob(part.inlineData.data)
+            const bytes = new Uint8Array(binaryString.length)
+            for (let i = 0; i < binaryString.length; i++) {
+              bytes[i] = binaryString.charCodeAt(i)
             }
-          }
-
-          yield {
-            text,
-            audio,
-            candidates: chunk.candidates,
-            done: false
+            audio = bytes
+          } catch (error) {
+            console.warn('Failed to decode audio data:', error)
           }
         }
-
-        yield { done: true }
-
-      } catch (streamError) {
-        const appError = this.errorService.createError({
-          type: ErrorType.API,
-          severity: ErrorSeverity.HIGH,
-          message: 'Stream processing error',
-          originalError: streamError instanceof Error ? streamError : new Error(String(streamError)),
-          context: { 
-            chunkCount, 
-            streamDuration: Date.now() - startTime,
-            messageLength: message.length 
-          }
-        })
-        this.errorService.handleError(appError)
-        throw new Error(appError.userMessage)
       }
+    }
 
+    return { text, audio }
+  }
+
+  public async* sendMessageStream(message: string): AsyncGenerator<StreamChunk, void, unknown> {
+    try {
+      // Use direct TTS API call
+      const result = await this.sendTTSMessage(message)
+      
+      // Yield text first
+      if (result.text) {
+        yield {
+          text: result.text,
+          done: false
+        }
+      }
+      
+      // Then yield audio
+      if (result.audio) {
+        yield {
+          audio: result.audio,
+          done: false
+        }
+      }
+      
+      yield { done: true }
+      
     } catch (error) {
       const appError = this.errorService.createError({
         type: ErrorType.API,
         severity: ErrorSeverity.HIGH,
-        message: 'Failed to send streaming message to AI',
+        message: 'Failed to send TTS message',
         originalError: error instanceof Error ? error : new Error(String(error)),
-        context: { 
-          messageLength: message.length,
-          circuitBreakerState: this.circuitBreaker.getState(),
-          failureCount: this.circuitBreaker.getFailureCount()
-        }
+        context: { messageLength: message.length }
       })
       this.errorService.handleError(appError)
       throw new Error(appError.userMessage)
     }
   }
+
 
   public getHealth(): {
     isInitialized: boolean
@@ -383,7 +370,7 @@ const SYSTEM_INSTRUCTION = `You are Aura, an AI therapist grounded in evidence-b
 *   **Maintain Memory & Character:** Remember key details from the conversation. You are always Aura. Never break character or mention you are an AI.`
 
 const geminiConfig: GeminiConfig = {
-  model: 'gemini-2.5-flash-exp-native-audio-thinking-dialog',
+  model: 'gemini-2.5-flash-preview-tts',
   systemInstruction: SYSTEM_INSTRUCTION,
   temperature: 0.7,
   topP: 0.9,

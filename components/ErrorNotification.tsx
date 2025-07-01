@@ -55,7 +55,7 @@ const ErrorNotification: React.FC<ErrorNotificationProps> = ({
     return null
   }
 
-  const getErrorIcon = (type: ErrorType, severity: ErrorSeverity) => {
+  const getErrorIcon = (type: ErrorType) => {
     const iconClass = "w-5 h-5 flex-shrink-0"
     
     switch (type) {
@@ -143,7 +143,7 @@ const ErrorNotification: React.FC<ErrorNotificationProps> = ({
       <div className={`rounded-lg border p-4 shadow-lg backdrop-blur-sm ${colors.bg}`}>
         <div className="flex items-start space-x-3">
           <div className={colors.icon}>
-            {getErrorIcon(error.type, error.severity)}
+            {getErrorIcon(error.type)}
           </div>
           
           <div className="flex-1 min-w-0">
@@ -224,7 +224,7 @@ const ErrorNotification: React.FC<ErrorNotificationProps> = ({
         )}
       </div>
       
-      <style jsx>{`
+      <style>{`
         @keyframes shrink {
           from { width: 100%; }
           to { width: 0%; }

@@ -395,7 +395,7 @@ describe('ErrorService', () => {
 
   describe('Global Error Handlers', () => {
     it('handles uncaught window errors', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
       
       // Simulate uncaught error
       const errorEvent = new ErrorEvent('error', {
@@ -418,7 +418,7 @@ describe('ErrorService', () => {
     })
 
     it('handles unhandled promise rejections', () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
       
       // Simulate unhandled promise rejection
       const rejectionEvent = new PromiseRejectionEvent('unhandledrejection', {

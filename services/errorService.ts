@@ -222,7 +222,7 @@ export class ErrorService {
 
   private reportError(error: AppError): void {
     // In production, this would send to monitoring service
-    console.warn('Error reporting service not configured')
+    console.warn('Error reporting service not configured for error:', error.id)
     
     // Placeholder for error reporting
     // Example: Sentry, LogRocket, Rollbar, etc.

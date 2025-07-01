@@ -61,6 +61,48 @@ interface SpeechRecognition extends EventTarget {
 const SpeechRecognition: SpeechRecognitionStatic | undefined = 
     (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
+// Convert PCM audio data to WAV format for browser playback
+function convertPCMToWAV(pcmData: Uint8Array, sampleRate: number, channels: number): ArrayBuffer {
+  const bytesPerSample = 2; // 16-bit PCM
+  const length = pcmData.length;
+  const buffer = new ArrayBuffer(44 + length);
+  const view = new DataView(buffer);
+  
+  // WAV header
+  // RIFF identifier
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  // file length minus RIFF identifier length and file description length
+  view.setUint32(4, 36 + length, true);
+  // RIFF type
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  // format chunk identifier
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  // format chunk length
+  view.setUint32(16, 16, true);
+  // sample format (raw)
+  view.setUint16(20, 1, true);
+  // channel count
+  view.setUint16(22, channels, true);
+  // sample rate
+  view.setUint32(24, sampleRate, true);
+  // byte rate (sample rate * channel count * bytes per sample)
+  view.setUint32(28, sampleRate * channels * bytesPerSample, true);
+  // block align (channel count * bytes per sample)
+  view.setUint16(32, channels * bytesPerSample, true);
+  // bits per sample
+  view.setUint16(34, 16, true);
+  // data chunk identifier
+  view.setUint32(36, 0x64617461, false); // "data"
+  // data chunk length
+  view.setUint32(40, length, true);
+  
+  // PCM data
+  const dataView = new Uint8Array(buffer, 44);
+  dataView.set(pcmData);
+  
+  return buffer;
+}
+
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -87,7 +129,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const initializeService = async () => {
       try {
-        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+        const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || 'AIzaSyCWfxF9fHIyJtPxnt0NplSHLZCkmY-eBrw';
         if (!apiKey) {
           throw new Error('API key not found in environment variables');
         }
@@ -216,7 +258,9 @@ const App: React.FC = () => {
 
             if (chunk.audio) {
                 try {
-                    const audioBlob = new Blob([chunk.audio], { type: 'audio/pcm' });
+                    // Convert PCM data to WAV format for browser playback
+                    const wavBuffer = convertPCMToWAV(chunk.audio, 24000, 1);
+                    const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' });
                     const audioUrl = URL.createObjectURL(audioBlob);
                     const audio = new Audio(audioUrl);
                     audioQueueRef.current.push(audio);
