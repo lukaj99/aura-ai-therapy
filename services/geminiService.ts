@@ -32,7 +32,7 @@ const SYSTEM_INSTRUCTION = `You are Aura, an AI therapist grounded in evidence-b
 
 export const startChatSession = (): Chat => {
   const chat = ai.chats.create({
-    model: 'gemini-2.5-flash-exp-native-audio-thinking-dialog',
+    model: 'gemini-2.5-flash',
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       temperature: 0.7,
